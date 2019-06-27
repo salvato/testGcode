@@ -14,6 +14,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     baudRate = QSerialPort::Baud115200;
     waitTimeout = 1000;
+    bReadyToSend = false;
+    bGrblConnected = false;
     responseData.clear();
     ConnectToGrbl();
 }
@@ -27,7 +29,6 @@ MainWindow::~MainWindow() {
 void
 MainWindow::closeEvent(QCloseEvent *event) {
     Q_UNUSED(event)
-
     if(serialPort.isOpen()) {
 #ifdef LOG_VERBOSE
         qDebug() << QString("Closing serial port %1")
@@ -75,11 +76,11 @@ MainWindow::ConnectToGrbl() {
             qDebug() << QString("Trying connection to %1")
                         .arg(serialPortinfo.portName());
 #endif
-            serialPort.clear();
             connect(&serialPort, SIGNAL(readyRead()),
                     this, SLOT(onSerialDataAvailable()));
             grblConnectionTimer.start(waitTimeout);
-            serialPort.write("\n");
+            char rst[2] = {0x18, 0};
+            serialPort.write(rst);
             return;
         }
 #ifdef LOG_VERBOSE
@@ -110,11 +111,11 @@ MainWindow::onGrblConnectionTimerTimeout() {
             qDebug() << QString("Trying connection to %1")
                        .arg(serialPortinfo.portName());
 #endif
-            serialPort.clear();
             connect(&serialPort, SIGNAL(readyRead()),
                     this, SLOT(onSerialDataAvailable()));
             grblConnectionTimer.start(waitTimeout);
-            serialPort.write("\n");
+            char rst[2] = {0x18, 0};
+            serialPort.write(rst);
             return;
         }
 #ifdef LOG_VERBOSE
@@ -138,13 +139,28 @@ MainWindow::onSerialDataAvailable() {
     while(!testPort->atEnd()) {
         responseData.append(testPort->readAll());
     }
-    qDebug() << responseData;
-    grblConnectionTimer.stop();
+    int eol = responseData.indexOf("\r\n");
+    if(eol != -1) {
+        QString sString = responseData.left(eol);
+        qDebug() << sString;
+        responseData.remove(0, eol+2);
+        if(sString.contains("ok")) {
+            emit ready2Send();
+            bReadyToSend = true;
+        }
+        bReadyToSend = false;
+        if(sString.contains("error")) {
+            qDebug() << "error !";
+        }
+        if(!bGrblConnected)
+            emit(grblFound());
+    }
 }
 
 
 void
 MainWindow::onGrblFound() {
-    // The event is handled in the derived classes
+    bGrblConnected = true;
+    grblConnectionTimer.stop();
 }
 

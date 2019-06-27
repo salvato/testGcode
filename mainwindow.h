@@ -29,6 +29,7 @@ public slots:
 
 signals:
     void grblFound();
+    void ready2Send();
 
 private:
     Ui::MainWindow *ui;
@@ -42,6 +43,8 @@ private:
     int                    waitTimeout;
     QByteArray             responseData;
     QTimer                 grblConnectionTimer;
+    bool                   bGrblConnected;
+    volatile bool          bReadyToSend;
 };
 
 #endif // MAINWINDOW_H
